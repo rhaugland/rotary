@@ -1,0 +1,94 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  member
+  admin
+}
+
+enum Channel {
+  sms
+  email
+  google_chat
+}
+
+enum TaskStatus {
+  open
+  in_progress
+  done
+  overdue
+}
+
+enum MessageDirection {
+  inbound
+  outbound
+}
+
+model User {
+  id               String         @id @default(uuid())
+  name             String
+  role             Role           @default(member)
+  preferredChannel Channel
+  quietHoursStart  String?        // e.g. "21:00"
+  quietHoursEnd    String?        // e.g. "08:00"
+  timezone         String         @default("America/New_York")
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  addresses        UserAddress[]
+  assignedTasks    Task[]         @relation("assignee")
+  createdTasks     Task[]         @relation("creator")
+  messages         Message[]
+
+  @@map("users")
+}
+
+model UserAddress {
+  id      String  @id @default(uuid())
+  userId  String
+  channel Channel
+  address String  @unique
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_addresses")
+}
+
+model Task {
+  id          String     @id @default(uuid())
+  title       String
+  description String?
+  status      TaskStatus @default(open)
+  dueDate     DateTime?
+  assigneeId  String
+  creatorId   String
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  assignee User      @relation("assignee", fields: [assigneeId], references: [id])
+  creator  User      @relation("creator", fields: [creatorId], references: [id])
+  messages Message[]
+
+  @@map("tasks")
+}
+
+model Message {
+  id           String           @id @default(uuid())
+  taskId       String?
+  userId       String
+  channel      Channel
+  direction    MessageDirection
+  rawText      String
+  parsedIntent String?          // JSON string of parsed intent
+  createdAt    DateTime         @default(now())
+
+  task Task? @relation(fields: [taskId], references: [id])
+  user User  @relation(fields: [userId], references: [id])
+
+  @@map("messages")
+}
