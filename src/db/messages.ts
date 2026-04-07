@@ -1,14 +1,5 @@
 import { Channel, MessageDirection } from "@prisma/client";
-
-// Lazy-loaded prisma instance so tests can work without config env vars
-let _prisma: import("@prisma/client").PrismaClient | null = null;
-function getPrisma() {
-  if (!_prisma) {
-    const { PrismaClient } = require("@prisma/client");
-    _prisma = new PrismaClient();
-  }
-  return _prisma!;
-}
+import { getPrisma } from "./client.js";
 
 export async function logMessage(data: {
   taskId?: string;

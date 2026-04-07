@@ -8,11 +8,11 @@ const adapters = new Map<Channel, ChannelAdapter>();
 
 export function initAdapters(config: {
   telnyx: { apiKey: string; phoneNumber: string; publicKey: string };
-  sendgrid: { apiKey: string; fromEmail: string; domain: string };
+  resend: { apiKey: string; fromEmail: string };
   googleChat: { serviceAccountKey: string; projectId: string };
 }): void {
   adapters.set("sms", new SmsAdapter(config.telnyx));
-  adapters.set("email", new EmailAdapter(config.sendgrid));
+  adapters.set("email", new EmailAdapter(config.resend));
   adapters.set("google_chat", new GoogleChatAdapter(config.googleChat));
 }
 

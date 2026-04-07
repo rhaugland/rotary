@@ -103,7 +103,7 @@ app.post("/api/users", async (req, res) => {
 
 // Start server
 async function main() {
-  initAdapters({ telnyx: config.telnyx, sendgrid: config.sendgrid, googleChat: config.googleChat });
+  initAdapters({ telnyx: config.telnyx, resend: config.resend, googleChat: config.googleChat });
   await startScheduler(config.redisUrl);
   app.listen(config.port, () => console.log(`Relay server running on port ${config.port}`));
 }

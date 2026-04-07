@@ -53,21 +53,17 @@ export async function processDueDateWarnings(): Promise<void> {
   const endOfTomorrow = new Date(startOfTomorrow);
   endOfTomorrow.setDate(endOfTomorrow.getDate() + 1);
 
-  const { PrismaClient } = await import("@prisma/client");
-  const db = new PrismaClient();
-  try {
-    const tasksDueTomorrow = await db.task.findMany({
-      where: { dueDate: { gte: startOfTomorrow, lt: endOfTomorrow }, status: { notIn: ["done"] } },
-      include: { assignee: { include: { addresses: true } } },
-    });
-    for (const task of tasksDueTomorrow) {
-      const address = task.assignee.addresses.find((a) => a.channel === task.assignee.preferredChannel);
-      if (address) {
-        const adapter = getAdapter(task.assignee.preferredChannel);
-        await adapter.sendMessage(address.address, `Reminder: "${task.title}" is due tomorrow.`);
-      }
+  const { getPrisma } = await import("../db/client.js");
+  const db = getPrisma();
+  const tasksDueTomorrow = await db.task.findMany({
+    where: { dueDate: { gte: startOfTomorrow, lt: endOfTomorrow }, status: { notIn: ["done"] } },
+    include: { assignee: { include: { addresses: true } } },
+  });
+  for (const task of tasksDueTomorrow) {
+    const address = task.assignee.addresses.find((a) => a.channel === task.assignee.preferredChannel);
+    if (address) {
+      const adapter = getAdapter(task.assignee.preferredChannel);
+      await adapter.sendMessage(address.address, `Reminder: "${task.title}" is due tomorrow.`);
     }
-  } finally {
-    await db.$disconnect();
   }
 }

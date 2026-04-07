@@ -1,52 +1,38 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("@sendgrid/mail", () => {
-  const mockSend = vi.fn();
-  const mockSetApiKey = vi.fn();
+const { mockEmailsSend } = vi.hoisted(() => ({
+  mockEmailsSend: vi.fn().mockResolvedValue({ id: "email_123" }),
+}));
 
-  return {
-    default: {
-      setApiKey: mockSetApiKey,
-      send: mockSend,
-      __mockSend: mockSend,
-      __mockSetApiKey: mockSetApiKey,
-    },
-  };
-});
+vi.mock("resend", () => ({
+  Resend: vi.fn().mockImplementation(function () {
+    return {
+      emails: {
+        send: mockEmailsSend,
+      },
+    };
+  }),
+}));
 
-import sgMail from "@sendgrid/mail";
+import { Resend } from "resend";
 import { EmailAdapter } from "../../src/adapters/email.js";
-
-type SgMailMock = typeof sgMail & {
-  __mockSend: ReturnType<typeof vi.fn>;
-  __mockSetApiKey: ReturnType<typeof vi.fn>;
-};
-
-const getMocks = () => {
-  const sg = sgMail as unknown as SgMailMock;
-  return {
-    send: sg.__mockSend,
-    setApiKey: sg.__mockSetApiKey,
-  };
-};
 
 const makeAdapter = () =>
   new EmailAdapter({
-    apiKey: "SG.test-api-key",
+    apiKey: "re_test_api_key",
     fromEmail: "relay@example.com",
-    domain: "mail.example.com",
   });
 
 describe("EmailAdapter", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockEmailsSend.mockResolvedValue({ id: "email_123" });
   });
 
   describe("constructor", () => {
-    it("calls sgMail.setApiKey with the provided api key", () => {
-      const { setApiKey } = getMocks();
+    it("instantiates Resend with the provided api key", () => {
       makeAdapter();
-      expect(setApiKey).toHaveBeenCalledWith("SG.test-api-key");
+      expect(Resend).toHaveBeenCalledWith("re_test_api_key");
     });
 
     it("sets channel to email", () => {
@@ -56,17 +42,13 @@ describe("EmailAdapter", () => {
   });
 
   describe("receiveMessage", () => {
-    it("extracts task address from envelope when present", () => {
+    it("extracts task address from payload.to when it starts with task-", () => {
       const adapter = makeAdapter();
       const payload = {
         from: "sender@client.com",
-        to: "relay@mail.example.com",
+        to: "task-abc-123@relay.example.com",
         subject: "Re: Relay Task Update",
         text: "on it",
-        envelope: JSON.stringify({
-          to: ["task-abc-123@mail.example.com", "relay@mail.example.com"],
-          from: "sender@client.com",
-        }),
       };
 
       const result = adapter.receiveMessage(payload);
@@ -75,40 +57,21 @@ describe("EmailAdapter", () => {
       expect(result.messageText).toBe("on it");
       expect(result.channel).toBe("email");
       expect(result.metadata.subject).toBe("Re: Relay Task Update");
-      expect(result.metadata.taskAddress).toBe("task-abc-123@mail.example.com");
+      expect(result.metadata.taskAddress).toBe("task-abc-123@relay.example.com");
     });
 
-    it("falls back to payload.to when no task- address is in envelope", () => {
+    it("falls back to payload.to when to does not start with task-", () => {
       const adapter = makeAdapter();
       const payload = {
         from: "sender@client.com",
-        to: "relay@mail.example.com",
+        to: "relay@example.com",
         subject: "Hello",
         text: "done",
-        envelope: JSON.stringify({
-          to: ["relay@mail.example.com"],
-          from: "sender@client.com",
-        }),
       };
 
       const result = adapter.receiveMessage(payload);
 
-      expect(result.metadata.taskAddress).toBe("relay@mail.example.com");
-    });
-
-    it("falls back to payload.to when envelope JSON is invalid", () => {
-      const adapter = makeAdapter();
-      const payload = {
-        from: "sender@client.com",
-        to: "relay@mail.example.com",
-        subject: "Hello",
-        text: "done",
-        envelope: "not-valid-json",
-      };
-
-      const result = adapter.receiveMessage(payload);
-
-      expect(result.metadata.taskAddress).toBe("relay@mail.example.com");
+      expect(result.metadata.taskAddress).toBe("relay@example.com");
     });
 
     it("sets channel to email regardless of payload content", () => {
@@ -118,7 +81,6 @@ describe("EmailAdapter", () => {
         to: "y@y.com",
         subject: "s",
         text: "t",
-        envelope: "{}",
       };
       const result = adapter.receiveMessage(payload);
       expect(result.channel).toBe("email");
@@ -190,44 +152,48 @@ describe("EmailAdapter", () => {
         status: "todo",
         dueDate: new Date("2026-04-15T12:00:00Z"),
       });
-      // Should include a weekday name (Wednesday for Apr 15, 2026)
       expect(result).toMatch(/Due: (Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)/);
     });
   });
 
   describe("sendMessage", () => {
     it("sends email with correct params and returns true on success", async () => {
-      const { send } = getMocks();
-      send.mockResolvedValue([{ statusCode: 202 }]);
       const adapter = makeAdapter();
 
       const result = await adapter.sendMessage("recipient@client.com", "Task updated!", "abc-123");
 
-      expect(send).toHaveBeenCalledWith({
-        to: "recipient@client.com",
+      expect(mockEmailsSend).toHaveBeenCalledWith({
         from: "relay@example.com",
-        replyTo: "task-abc-123@mail.example.com",
+        to: "recipient@client.com",
         subject: "Relay Task Update",
         text: "Task updated!",
+        replyTo: "task-abc-123@example.com",
       });
       expect(result).toBe(true);
     });
 
-    it("uses fromEmail as replyTo when no taskId provided", async () => {
-      const { send } = getMocks();
-      send.mockResolvedValue([{ statusCode: 202 }]);
+    it("uses fromEmail domain for reply_to when taskId provided", async () => {
+      const adapter = makeAdapter();
+
+      await adapter.sendMessage("recipient@client.com", "Hello", "xyz-789");
+
+      expect(mockEmailsSend).toHaveBeenCalledWith(
+        expect.objectContaining({ replyTo: "task-xyz-789@example.com" })
+      );
+    });
+
+    it("uses fromEmail as reply_to when no taskId provided", async () => {
       const adapter = makeAdapter();
 
       await adapter.sendMessage("recipient@client.com", "Hello");
 
-      expect(send).toHaveBeenCalledWith(
+      expect(mockEmailsSend).toHaveBeenCalledWith(
         expect.objectContaining({ replyTo: "relay@example.com" })
       );
     });
 
-    it("returns false and logs error when sgMail.send throws", async () => {
-      const { send } = getMocks();
-      send.mockRejectedValue(new Error("SendGrid API error"));
+    it("returns false and logs error when resend.emails.send throws", async () => {
+      mockEmailsSend.mockRejectedValue(new Error("Resend API error"));
       const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
       const adapter = makeAdapter();
 
@@ -254,12 +220,12 @@ describe("EmailAdapter", () => {
   describe("extractTaskIdFromAddress", () => {
     it("extracts task id from a task- address", () => {
       const adapter = makeAdapter();
-      expect(adapter.extractTaskIdFromAddress("task-abc-123@mail.example.com")).toBe("abc-123");
+      expect(adapter.extractTaskIdFromAddress("task-abc-123@relay.example.com")).toBe("abc-123");
     });
 
     it("returns null when address does not start with task-", () => {
       const adapter = makeAdapter();
-      expect(adapter.extractTaskIdFromAddress("relay@mail.example.com")).toBeNull();
+      expect(adapter.extractTaskIdFromAddress("relay@example.com")).toBeNull();
     });
 
     it("extracts alphanumeric task ids", () => {

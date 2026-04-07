@@ -24,10 +24,9 @@ export const config = {
     phoneNumber: requireEnv("TELNYX_PHONE_NUMBER"),
     publicKey: requireEnv("TELNYX_PUBLIC_KEY"),
   },
-  sendgrid: {
-    apiKey: requireEnv("SENDGRID_API_KEY"),
+  resend: {
+    apiKey: requireEnv("RESEND_API_KEY"),
     fromEmail: requireEnv("RELAY_FROM_EMAIL"),
-    domain: requireEnv("RELAY_EMAIL_DOMAIN"),
   },
   googleChat: {
     serviceAccountKey: requireEnv("GOOGLE_CHAT_SERVICE_ACCOUNT_KEY"),

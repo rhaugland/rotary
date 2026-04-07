@@ -1,12 +1,11 @@
-import { PrismaClient, Channel, Role } from "@prisma/client";
+import "dotenv/config";
+import { Channel, Role } from "@prisma/client";
+import { getPrisma } from "../../src/db/client.js";
 
-export const testPrisma = new PrismaClient();
+export const testPrisma = getPrisma();
 
 export async function cleanDatabase() {
-  await testPrisma.message.deleteMany();
-  await testPrisma.task.deleteMany();
-  await testPrisma.userAddress.deleteMany();
-  await testPrisma.user.deleteMany();
+  await testPrisma.$executeRawUnsafe('TRUNCATE TABLE messages, tasks, user_addresses, users CASCADE');
 }
 
 export async function createTestUser(overrides: {

@@ -1,37 +1,28 @@
-import sgMail from "@sendgrid/mail";
+import { Resend } from "resend";
 import { ChannelAdapter, InboundMessage } from "./types.js";
 import { Channel } from "@prisma/client";
 
-interface SendGridInboundPayload {
+interface ResendInboundPayload {
   from: string;
   to: string;
   subject: string;
   text: string;
-  envelope: string;
   [key: string]: unknown;
 }
 
 export class EmailAdapter implements ChannelAdapter {
   readonly channel: Channel = "email";
   private fromEmail: string;
-  private domain: string;
+  private resend: Resend;
 
-  constructor(config: { apiKey: string; fromEmail: string; domain: string }) {
-    sgMail.setApiKey(config.apiKey);
+  constructor(config: { apiKey: string; fromEmail: string }) {
+    this.resend = new Resend(config.apiKey);
     this.fromEmail = config.fromEmail;
-    this.domain = config.domain;
   }
 
   receiveMessage(rawPayload: unknown): InboundMessage {
-    const payload = rawPayload as SendGridInboundPayload;
-    let taskAddress: string | undefined;
-    try {
-      const envelope = JSON.parse(payload.envelope);
-      const toAddresses: string[] = envelope.to ?? [];
-      taskAddress = toAddresses.find((addr: string) => addr.startsWith("task-"));
-    } catch {
-      taskAddress = payload.to;
-    }
+    const payload = rawPayload as ResendInboundPayload;
+    const taskAddress = payload.to?.startsWith("task-") ? payload.to : undefined;
     return {
       senderAddress: payload.from,
       messageText: payload.text,
@@ -48,14 +39,15 @@ export class EmailAdapter implements ChannelAdapter {
     formattedMessage: string,
     taskId?: string
   ): Promise<boolean> {
-    const replyTo = taskId ? `task-${taskId}@${this.domain}` : this.fromEmail;
+    const fromDomain = this.fromEmail.split("@")[1];
+    const replyTo = taskId ? `task-${taskId}@${fromDomain}` : this.fromEmail;
     try {
-      await sgMail.send({
-        to: recipientAddress,
+      await this.resend.emails.send({
         from: this.fromEmail,
-        replyTo,
+        to: recipientAddress,
         subject: "Relay Task Update",
         text: formattedMessage,
+        replyTo,
       });
       return true;
     } catch (error) {
