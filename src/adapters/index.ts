@@ -7,11 +7,11 @@ import { GoogleChatAdapter } from "./google-chat.js";
 const adapters = new Map<Channel, ChannelAdapter>();
 
 export function initAdapters(config: {
-  twilio: { accountSid: string; authToken: string; phoneNumber: string };
+  telnyx: { apiKey: string; phoneNumber: string; publicKey: string };
   sendgrid: { apiKey: string; fromEmail: string; domain: string };
   googleChat: { serviceAccountKey: string; projectId: string };
 }): void {
-  adapters.set("sms", new SmsAdapter(config.twilio));
+  adapters.set("sms", new SmsAdapter(config.telnyx));
   adapters.set("email", new EmailAdapter(config.sendgrid));
   adapters.set("google_chat", new GoogleChatAdapter(config.googleChat));
 }

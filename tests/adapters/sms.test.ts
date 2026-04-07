@@ -1,41 +1,35 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("twilio", () => {
-  const mockCreate = vi.fn();
-  const mockValidate = vi.fn();
+vi.mock("telnyx", () => {
+  const mockSend = vi.fn();
 
-  const twilioConstructor = vi.fn().mockImplementation(() => ({
-    messages: { create: mockCreate },
-  }));
-  (twilioConstructor as unknown as Record<string, unknown>).validateRequest = mockValidate;
-  (twilioConstructor as unknown as Record<string, unknown>).__mockCreate = mockCreate;
-  (twilioConstructor as unknown as Record<string, unknown>).__mockValidate = mockValidate;
+  function TelnyxConstructor(this: Record<string, unknown>) {
+    this.messages = { send: mockSend };
+  }
+  (TelnyxConstructor as unknown as Record<string, unknown>).__mockSend = mockSend;
 
-  return { default: twilioConstructor };
+  return { default: TelnyxConstructor };
 });
 
-import twilio from "twilio";
+import Telnyx from "telnyx";
 import { SmsAdapter } from "../../src/adapters/sms.js";
 
-type TwilioMock = ReturnType<typeof vi.fn> & {
-  validateRequest: ReturnType<typeof vi.fn>;
-  __mockCreate: ReturnType<typeof vi.fn>;
-  __mockValidate: ReturnType<typeof vi.fn>;
+type TelnyxMock = ReturnType<typeof vi.fn> & {
+  __mockSend: ReturnType<typeof vi.fn>;
 };
 
 const getMocks = () => {
-  const t = twilio as unknown as TwilioMock;
+  const t = Telnyx as unknown as TelnyxMock;
   return {
-    messagesCreate: t.__mockCreate,
-    validateRequest: t.__mockValidate,
+    messagesSend: t.__mockSend,
   };
 };
 
 const makeAdapter = () =>
   new SmsAdapter({
-    accountSid: "ACtest123",
-    authToken: "authtoken456",
+    apiKey: "KEY_test123",
     phoneNumber: "+15550001111",
+    publicKey: "dGVzdHB1YmxpY2tleXRlc3RwdWJsaWNrZXk=", // 32-byte base64 placeholder
   });
 
 describe("SmsAdapter", () => {
@@ -44,13 +38,16 @@ describe("SmsAdapter", () => {
   });
 
   describe("receiveMessage", () => {
-    it("maps Twilio webhook payload to InboundMessage", () => {
+    it("maps Telnyx webhook payload to InboundMessage", () => {
       const adapter = makeAdapter();
       const payload = {
-        From: "+15559876543",
-        Body: "on it",
-        MessageSid: "SMabc123",
-        AccountSid: "ACtest123",
+        data: {
+          payload: {
+            from: { phone_number: "+15559876543" },
+            text: "on it",
+            id: "msg_abc123",
+          },
+        },
       };
 
       const result = adapter.receiveMessage(payload);
@@ -58,15 +55,19 @@ describe("SmsAdapter", () => {
       expect(result.senderAddress).toBe("+15559876543");
       expect(result.messageText).toBe("on it");
       expect(result.channel).toBe("sms");
-      expect(result.metadata).toEqual({ messageSid: "SMabc123" });
+      expect(result.metadata).toEqual({ messageId: "msg_abc123" });
     });
 
     it("sets channel to sms regardless of payload content", () => {
       const adapter = makeAdapter();
       const result = adapter.receiveMessage({
-        From: "+10000000000",
-        Body: "done",
-        MessageSid: "SMxyz",
+        data: {
+          payload: {
+            from: { phone_number: "+10000000000" },
+            text: "done",
+            id: "msg_xyz",
+          },
+        },
       });
       expect(result.channel).toBe("sms");
     });
@@ -128,24 +129,24 @@ describe("SmsAdapter", () => {
   });
 
   describe("sendMessage", () => {
-    it("calls twilio messages.create and returns true on success", async () => {
-      const { messagesCreate } = getMocks();
-      messagesCreate.mockResolvedValue({ sid: "SMsent123" });
+    it("calls telnyx messages.send and returns true on success", async () => {
+      const { messagesSend } = getMocks();
+      messagesSend.mockResolvedValue({ data: { id: "msg_sent123" } });
       const adapter = makeAdapter();
 
       const result = await adapter.sendMessage("+15559999999", "Hello from relay!");
 
-      expect(messagesCreate).toHaveBeenCalledWith({
-        body: "Hello from relay!",
+      expect(messagesSend).toHaveBeenCalledWith({
         from: "+15550001111",
         to: "+15559999999",
+        text: "Hello from relay!",
       });
       expect(result).toBe(true);
     });
 
-    it("returns false and logs error when twilio throws", async () => {
-      const { messagesCreate } = getMocks();
-      messagesCreate.mockRejectedValue(new Error("Twilio API error"));
+    it("returns false and logs error when telnyx throws", async () => {
+      const { messagesSend } = getMocks();
+      messagesSend.mockRejectedValue(new Error("Telnyx API error"));
       const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
       const adapter = makeAdapter();
 
@@ -158,56 +159,33 @@ describe("SmsAdapter", () => {
   });
 
   describe("verifyWebhook", () => {
-    it("returns false when x-twilio-signature header is missing", () => {
+    it("returns false when telnyx-signature-ed25519 header is missing", () => {
       const adapter = makeAdapter();
       const result = adapter.verifyWebhook({
         headers: {},
-        body: { From: "+1555", Body: "hi" },
-        url: "https://example.com/webhook/sms",
+        body: { data: { payload: { from: { phone_number: "+1555" }, text: "hi", id: "1" } } },
       });
       expect(result).toBe(false);
     });
 
-    it("returns false when url is missing", () => {
+    it("returns false when telnyx-timestamp header is missing", () => {
       const adapter = makeAdapter();
       const result = adapter.verifyWebhook({
-        headers: { "x-twilio-signature": "somesig" },
-        body: { From: "+1555", Body: "hi" },
+        headers: { "telnyx-signature-ed25519": "somesig" },
+        body: { data: { payload: { from: { phone_number: "+1555" }, text: "hi", id: "1" } } },
       });
       expect(result).toBe(false);
     });
 
-    it("delegates to twilio.validateRequest and returns its result", () => {
-      const { validateRequest } = getMocks();
-      validateRequest.mockReturnValue(true);
+    it("returns false when signature is invalid", () => {
       const adapter = makeAdapter();
-
       const result = adapter.verifyWebhook({
-        headers: { "x-twilio-signature": "validsig" },
-        body: { From: "+15559876543", Body: "done" },
-        url: "https://example.com/webhook/sms",
+        headers: {
+          "telnyx-signature-ed25519": "aW52YWxpZA==",
+          "telnyx-timestamp": String(Math.floor(Date.now() / 1000)),
+        },
+        body: { data: { payload: { from: { phone_number: "+1555" }, text: "hi", id: "1" } } },
       });
-
-      expect(validateRequest).toHaveBeenCalledWith(
-        "authtoken456",
-        "validsig",
-        "https://example.com/webhook/sms",
-        { From: "+15559876543", Body: "done" }
-      );
-      expect(result).toBe(true);
-    });
-
-    it("returns false when twilio.validateRequest returns false", () => {
-      const { validateRequest } = getMocks();
-      validateRequest.mockReturnValue(false);
-      const adapter = makeAdapter();
-
-      const result = adapter.verifyWebhook({
-        headers: { "x-twilio-signature": "badsig" },
-        body: { From: "+1555", Body: "hi" },
-        url: "https://example.com/webhook/sms",
-      });
-
       expect(result).toBe(false);
     });
   });

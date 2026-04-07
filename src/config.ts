@@ -1,4 +1,3 @@
-import { PrismaClient } from "@prisma/client";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -20,10 +19,10 @@ export const config = {
   nodeEnv: optionalEnv("NODE_ENV", "development"),
   databaseUrl: requireEnv("DATABASE_URL"),
   redisUrl: requireEnv("REDIS_URL"),
-  twilio: {
-    accountSid: requireEnv("TWILIO_ACCOUNT_SID"),
-    authToken: requireEnv("TWILIO_AUTH_TOKEN"),
-    phoneNumber: requireEnv("TWILIO_PHONE_NUMBER"),
+  telnyx: {
+    apiKey: requireEnv("TELNYX_API_KEY"),
+    phoneNumber: requireEnv("TELNYX_PHONE_NUMBER"),
+    publicKey: requireEnv("TELNYX_PUBLIC_KEY"),
   },
   sendgrid: {
     apiKey: requireEnv("SENDGRID_API_KEY"),
@@ -39,4 +38,3 @@ export const config = {
   },
 } as const;
 
-export const prisma = new PrismaClient();

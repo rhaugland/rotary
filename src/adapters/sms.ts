@@ -1,43 +1,48 @@
-import twilio from "twilio";
+import Telnyx from "telnyx";
+import { createVerify } from "crypto";
 import { ChannelAdapter, InboundMessage } from "./types.js";
 import { Channel } from "@prisma/client";
 
-interface TwilioWebhookPayload {
-  From: string;
-  Body: string;
-  MessageSid: string;
-  AccountSid?: string;
+interface TelnyxWebhookPayload {
+  data: {
+    payload: {
+      from: { phone_number: string };
+      text: string;
+      id: string;
+      [key: string]: unknown;
+    };
+  };
   [key: string]: unknown;
 }
 
 export class SmsAdapter implements ChannelAdapter {
   readonly channel: Channel = "sms";
-  private client: ReturnType<typeof twilio>;
+  private client: InstanceType<typeof Telnyx>;
   private phoneNumber: string;
-  private authToken: string;
+  private publicKey: string;
 
-  constructor(config: { accountSid: string; authToken: string; phoneNumber: string }) {
-    this.client = twilio(config.accountSid, config.authToken);
+  constructor(config: { apiKey: string; phoneNumber: string; publicKey: string }) {
+    this.client = new Telnyx({ apiKey: config.apiKey });
     this.phoneNumber = config.phoneNumber;
-    this.authToken = config.authToken;
+    this.publicKey = config.publicKey;
   }
 
   receiveMessage(rawPayload: unknown): InboundMessage {
-    const payload = rawPayload as TwilioWebhookPayload;
+    const payload = rawPayload as TelnyxWebhookPayload;
     return {
-      senderAddress: payload.From,
-      messageText: payload.Body,
+      senderAddress: payload.data.payload.from.phone_number,
+      messageText: payload.data.payload.text,
       channel: "sms",
-      metadata: { messageSid: payload.MessageSid },
+      metadata: { messageId: payload.data.payload.id },
     };
   }
 
   async sendMessage(recipientAddress: string, formattedMessage: string): Promise<boolean> {
     try {
-      await this.client.messages.create({
-        body: formattedMessage,
+      await this.client.messages.send({
         from: this.phoneNumber,
         to: recipientAddress,
+        text: formattedMessage,
       });
       return true;
     } catch (error) {
@@ -64,13 +69,42 @@ export class SmsAdapter implements ChannelAdapter {
     body: unknown;
     url?: string;
   }): boolean {
-    const signature = request.headers["x-twilio-signature"];
-    if (!signature || typeof signature !== "string" || !request.url) return false;
-    return twilio.validateRequest(
-      this.authToken,
-      signature,
-      request.url,
-      request.body as Record<string, string>
-    );
+    const signature = request.headers["telnyx-signature-ed25519"];
+    const timestamp = request.headers["telnyx-timestamp"];
+
+    if (
+      !signature ||
+      typeof signature !== "string" ||
+      !timestamp ||
+      typeof timestamp !== "string"
+    ) {
+      return false;
+    }
+
+    try {
+      const body =
+        typeof request.body === "string"
+          ? request.body
+          : JSON.stringify(request.body);
+      // Signed payload format: "<timestamp>|<body>"
+      const signedPayload = `${timestamp}|${body}`;
+      const signatureBytes = Buffer.from(signature, "base64");
+      const publicKeyBytes = Buffer.from(this.publicKey, "base64");
+
+      // Build DER-encoded Ed25519 public key (SubjectPublicKeyInfo)
+      const derPrefix = Buffer.from("302a300506032b6570032100", "hex");
+      const derPublicKey = Buffer.concat([derPrefix, publicKeyBytes]);
+      const pemPublicKey = [
+        "-----BEGIN PUBLIC KEY-----",
+        derPublicKey.toString("base64"),
+        "-----END PUBLIC KEY-----",
+      ].join("\n");
+
+      const verify = createVerify("Ed25519");
+      verify.update(signedPayload);
+      return verify.verify(pemPublicKey, signatureBytes);
+    } catch {
+      return false;
+    }
   }
 }

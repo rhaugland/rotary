@@ -1,5 +1,6 @@
 import express from "express";
-import { config, prisma } from "./config.js";
+import { config } from "./config.js";
+import { getPrisma } from "./db/client.js";
 import { initAdapters, getAdapter } from "./adapters/index.js";
 import { handleInboundMessage } from "./router/router.js";
 import { startScheduler } from "./scheduler/scheduler.js";
@@ -13,7 +14,7 @@ app.get("/health", (_req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
-// SMS Webhook (Twilio)
+// SMS Webhook (Telnyx)
 app.post("/webhooks/sms", async (req, res) => {
   try {
     const adapter = getAdapter("sms");
@@ -73,14 +74,14 @@ app.post("/webhooks/google-chat", async (req, res) => {
 // Admin API
 app.get("/api/tasks", async (_req, res) => {
   try {
-    const tasks = await prisma.task.findMany({ include: { assignee: true, creator: true }, orderBy: { createdAt: "desc" } });
+    const tasks = await getPrisma().task.findMany({ include: { assignee: true, creator: true }, orderBy: { createdAt: "desc" } });
     res.json(tasks);
   } catch (error) { console.error("Failed to list tasks:", error); res.status(500).json({ error: "Internal error" }); }
 });
 
 app.get("/api/users", async (_req, res) => {
   try {
-    const users = await prisma.user.findMany({ include: { addresses: true } });
+    const users = await getPrisma().user.findMany({ include: { addresses: true } });
     res.json(users);
   } catch (error) { console.error("Failed to list users:", error); res.status(500).json({ error: "Internal error" }); }
 });
@@ -92,7 +93,7 @@ app.post("/api/users", async (req, res) => {
       res.status(400).json({ error: "name, preferredChannel, and addresses are required" });
       return;
     }
-    const user = await prisma.user.create({
+    const user = await getPrisma().user.create({
       data: { name, role: role ?? "member", preferredChannel, addresses: { create: addresses } },
       include: { addresses: true },
     });
@@ -102,7 +103,7 @@ app.post("/api/users", async (req, res) => {
 
 // Start server
 async function main() {
-  initAdapters({ twilio: config.twilio, sendgrid: config.sendgrid, googleChat: config.googleChat });
+  initAdapters({ telnyx: config.telnyx, sendgrid: config.sendgrid, googleChat: config.googleChat });
   await startScheduler(config.redisUrl);
   app.listen(config.port, () => console.log(`Relay server running on port ${config.port}`));
 }
