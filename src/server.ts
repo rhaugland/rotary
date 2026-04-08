@@ -4,6 +4,9 @@ import { getPrisma } from "./db/client.js";
 import { initAdapters, getAdapter } from "./adapters/index.js";
 import { handleInboundMessage } from "./router/router.js";
 import { startScheduler } from "./scheduler/scheduler.js";
+import { authRouter } from "./api/auth.js";
+import { workspacesRouter } from "./api/workspaces.js";
+import { invitesRouter } from "./api/invites.js";
 
 const app = express();
 app.use(express.json());
@@ -100,6 +103,15 @@ app.post("/api/users", async (req, res) => {
     res.status(201).json(user);
   } catch (error) { console.error("Failed to create user:", error); res.status(500).json({ error: "Internal error" }); }
 });
+
+// Auth API
+app.use("/api/auth", authRouter);
+
+// Workspace API
+app.use("/api/workspaces", workspacesRouter);
+
+// Invite API (mixed auth — some routes public, some admin)
+app.use("/api", invitesRouter);
 
 // Start server
 async function main() {
