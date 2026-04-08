@@ -3,6 +3,7 @@ import { useAuth } from "./hooks/useAuth";
 import Layout from "./components/Layout";
 import Login from "./pages/Login";
 import Verify from "./pages/Verify";
+import Invite from "./pages/Invite";
 
 export default function App() {
   const { user, loading, login, logout } = useAuth();
@@ -19,7 +20,7 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/verify/:token" element={<Verify onLogin={login} />} />
-      <Route path="/invite/:token" element={<div>Invite page coming soon</div>} />
+      <Route path="/invite/:token" element={<Invite />} />
 
       {user ? (
         <Route element={<Layout user={user} onLogout={logout} />}>
