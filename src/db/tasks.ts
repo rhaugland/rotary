@@ -7,6 +7,7 @@ export async function createTask(data: {
   assigneeId: string;
   creatorId: string;
   dueDate?: Date;
+  workspaceId?: string;
 }) {
   const prisma = getPrisma();
   return prisma.task.create({
@@ -16,6 +17,7 @@ export async function createTask(data: {
       assigneeId: data.assigneeId,
       creatorId: data.creatorId,
       dueDate: data.dueDate,
+      workspaceId: data.workspaceId,
     },
     include: { assignee: true, creator: true },
   });

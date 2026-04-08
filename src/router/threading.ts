@@ -27,3 +27,13 @@ export function formatDisambiguationMessage(
   );
   return `Which task? Reply with the number:\n${lines.join("\n")}`;
 }
+
+const activeWorkspaceMap = new Map<string, string>();
+
+export function setActiveWorkspaceForUser(userId: string, workspaceId: string): void {
+  activeWorkspaceMap.set(userId, workspaceId);
+}
+
+export function getActiveWorkspaceForUser(userId: string): string | null {
+  return activeWorkspaceMap.get(userId) ?? null;
+}

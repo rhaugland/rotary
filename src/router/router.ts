@@ -9,9 +9,11 @@ import {
   setActiveTaskForUser,
   getOpenTasksForDisambiguation,
   formatDisambiguationMessage,
+  getActiveWorkspaceForUser,
 } from "./threading.js";
 import { createTask, updateTaskStatus, updateTaskDueDate, getTaskById } from "../db/tasks.js";
 import { findUserByName, getAllUsers } from "../db/users.js";
+import { getWorkspaceMemberships, findUserByNameInWorkspace } from "../db/workspaces.js";
 import { logMessage } from "../db/messages.js";
 
 interface RouteResult {
@@ -30,7 +32,19 @@ export async function handleInboundMessage(
     return { success: false, error: "Unknown sender: " + inbound.senderAddress };
   }
 
-  // 2. Log inbound message
+  // 2. Resolve workspace context
+  const memberships = await getWorkspaceMemberships(sender.id);
+  let workspaceId: string | undefined;
+  if (memberships.length === 1) {
+    workspaceId = memberships[0].workspaceId;
+  } else if (memberships.length > 1) {
+    const activeWs = getActiveWorkspaceForUser(sender.id);
+    if (activeWs) {
+      workspaceId = activeWs;
+    }
+  }
+
+  // 3. Log inbound message
   await logMessage({
     userId: sender.id,
     channel: inbound.channel,
@@ -38,24 +52,24 @@ export async function handleInboundMessage(
     rawText: inbound.messageText,
   });
 
-  // 3. Get team member names for parser context
+  // 4. Get team member names for parser context
   const allUsers = await getAllUsers();
   const teamNames = allUsers.map((u) => u.name);
   const currentDate = new Date().toISOString().split("T")[0];
 
-  // 4. Parse intent
+  // 5. Parse intent
   const parsed = await parseMessage(inbound.messageText, currentDate, teamNames);
 
-  // 5. Low confidence — ask for clarification
+  // 6. Low confidence — ask for clarification
   if (parsed.confidence < 0.7 && parsed.intent !== "unknown") {
     await sendToUser(sender.id, sender.preferredChannel, "I'm not sure what you mean. Could you rephrase that?");
     return { success: true, action: "clarification_requested" };
   }
 
-  // 6. Route based on intent
+  // 7. Route based on intent
   switch (parsed.intent) {
     case "create_task":
-      return handleCreateTask(parsed, sender, inbound.channel);
+      return handleCreateTask(parsed, sender, inbound.channel, workspaceId);
     case "update_status":
       return handleUpdateStatus(parsed, sender, inbound.channel);
     case "add_comment":
@@ -71,7 +85,7 @@ export async function handleInboundMessage(
   }
 }
 
-async function handleCreateTask(parsed: any, sender: any, channel: Channel): Promise<RouteResult> {
+async function handleCreateTask(parsed: any, sender: any, channel: Channel, workspaceId?: string): Promise<RouteResult> {
   if (!parsed.assigneeName || !parsed.taskTitle) {
     await sendToUser(sender.id, sender.preferredChannel,
       "I couldn't figure out who to assign this to or what the task is. Try something like: \"Jake needs to finish the logo by Friday\""
@@ -79,14 +93,23 @@ async function handleCreateTask(parsed: any, sender: any, channel: Channel): Pro
     return { success: false, error: "Missing assignee or title" };
   }
 
-  const assignee = await findUserByName(parsed.assigneeName);
-  if (!assignee) {
-    await sendToUser(sender.id, sender.preferredChannel, `I don't know anyone named "${parsed.assigneeName}". Check the name and try again.`);
-    return { success: false, error: "Assignee not found: " + parsed.assigneeName };
+  let assignee;
+  if (workspaceId) {
+    assignee = await findUserByNameInWorkspace(workspaceId, parsed.assigneeName);
+    if (!assignee) {
+      await sendToUser(sender.id, sender.preferredChannel, `I don't know anyone named "${parsed.assigneeName}" in this workspace. Check the name and try again.`);
+      return { success: false, error: "Assignee not found in workspace: " + parsed.assigneeName };
+    }
+  } else {
+    assignee = await findUserByName(parsed.assigneeName);
+    if (!assignee) {
+      await sendToUser(sender.id, sender.preferredChannel, `I don't know anyone named "${parsed.assigneeName}". Check the name and try again.`);
+      return { success: false, error: "Assignee not found: " + parsed.assigneeName };
+    }
   }
 
   const dueDate = parsed.dueDate ? new Date(parsed.dueDate) : undefined;
-  const task = await createTask({ title: parsed.taskTitle, assigneeId: assignee.id, creatorId: sender.id, dueDate });
+  const task = await createTask({ title: parsed.taskTitle, assigneeId: assignee.id, creatorId: sender.id, dueDate, workspaceId });
 
   await logMessage({ taskId: task.id, userId: sender.id, channel, direction: "inbound", rawText: `Created task: ${parsed.taskTitle}`, parsedIntent: JSON.stringify(parsed) });
 
