@@ -29,6 +29,11 @@ enum MessageDirection {
   outbound
 }
 
+enum WorkspaceRole {
+  admin
+  member
+}
+
 model User {
   id               String         @id @default(uuid())
   name             String
@@ -44,6 +49,9 @@ model User {
   assignedTasks    Task[]         @relation("assignee")
   createdTasks     Task[]         @relation("creator")
   messages         Message[]
+  memberships      WorkspaceMember[]
+  magicLinks       MagicLink[]
+  createdInvites   InviteLink[]   @relation("inviteCreator")
 
   @@map("users")
 }
@@ -67,12 +75,14 @@ model Task {
   dueDate     DateTime?
   assigneeId  String
   creatorId   String
+  workspaceId String?
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 
-  assignee User      @relation("assignee", fields: [assigneeId], references: [id])
-  creator  User      @relation("creator", fields: [creatorId], references: [id])
-  messages Message[]
+  assignee  User       @relation("assignee", fields: [assigneeId], references: [id])
+  creator   User       @relation("creator", fields: [creatorId], references: [id])
+  workspace Workspace? @relation(fields: [workspaceId], references: [id])
+  messages  Message[]
 
   @@map("tasks")
 }
@@ -91,4 +101,62 @@ model Message {
   user User  @relation(fields: [userId], references: [id])
 
   @@map("messages")
+}
+
+model Workspace {
+  id        String   @id @default(uuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  members     WorkspaceMember[]
+  tasks       Task[]
+  inviteLinks InviteLink[]
+
+  @@map("workspaces")
+}
+
+model WorkspaceMember {
+  id          String        @id @default(uuid())
+  workspaceId String
+  userId      String
+  role        WorkspaceRole @default(member)
+  joinedAt    DateTime      @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@map("workspace_members")
+}
+
+model InviteLink {
+  id          String    @id @default(uuid())
+  workspaceId String
+  token       String    @unique
+  createdById String
+  expiresAt   DateTime?
+  maxUses     Int?
+  useCount    Int       @default(0)
+  active      Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy User      @relation("inviteCreator", fields: [createdById], references: [id])
+
+  @@map("invite_links")
+}
+
+model MagicLink {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("magic_links")
 }

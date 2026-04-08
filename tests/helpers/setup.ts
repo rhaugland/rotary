@@ -1,11 +1,11 @@
 import "dotenv/config";
-import { Channel, Role } from "@prisma/client";
+import { Channel, Role, WorkspaceRole } from "@prisma/client";
 import { getPrisma } from "../../src/db/client.js";
 
 export const testPrisma = getPrisma();
 
 export async function cleanDatabase() {
-  await testPrisma.$executeRawUnsafe('TRUNCATE TABLE messages, tasks, user_addresses, users CASCADE');
+  await testPrisma.$executeRawUnsafe('TRUNCATE TABLE magic_links, invite_links, workspace_members, messages, tasks, user_addresses, workspaces, users CASCADE');
 }
 
 export async function createTestUser(overrides: {
@@ -28,4 +28,22 @@ export async function createTestUser(overrides: {
     include: { addresses: true },
   });
   return user;
+}
+
+export async function createTestWorkspace(overrides: {
+  name?: string;
+  slug?: string;
+  adminUserId?: string;
+} = {}) {
+  const workspace = await testPrisma.workspace.create({
+    data: {
+      name: overrides.name ?? "Test Workspace",
+      slug: overrides.slug ?? "test-workspace",
+      members: overrides.adminUserId
+        ? { create: { userId: overrides.adminUserId, role: "admin" } }
+        : undefined,
+    },
+    include: { members: true },
+  });
+  return workspace;
 }
