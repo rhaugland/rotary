@@ -4,6 +4,7 @@ import Layout from "./components/Layout";
 import Login from "./pages/Login";
 import Verify from "./pages/Verify";
 import Invite from "./pages/Invite";
+import Dashboard from "./pages/Dashboard";
 
 export default function App() {
   const { user, loading, login, logout } = useAuth();
@@ -25,7 +26,7 @@ export default function App() {
       {user ? (
         <Route element={<Layout user={user} onLogout={logout} />}>
           <Route path="/" element={<Navigate to={`/w/${user.workspaces[0]?.slug ?? ""}`} replace />} />
-          <Route path="/w/:slug" element={<div className="text-brown">Dashboard home</div>} />
+          <Route path="/w/:slug" element={<Dashboard />} />
           <Route path="/w/:slug/tasks" element={<div className="text-brown">Tasks page</div>} />
           <Route path="/w/:slug/members" element={<div className="text-brown">Members page</div>} />
         </Route>
