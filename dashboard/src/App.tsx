@@ -6,6 +6,7 @@ import Verify from "./pages/Verify";
 import Invite from "./pages/Invite";
 import Dashboard from "./pages/Dashboard";
 import Tasks from "./pages/Tasks";
+import Members from "./pages/Members";
 
 export default function App() {
   const { user, loading, login, logout } = useAuth();
@@ -29,7 +30,7 @@ export default function App() {
           <Route path="/" element={<Navigate to={`/w/${user.workspaces[0]?.slug ?? ""}`} replace />} />
           <Route path="/w/:slug" element={<Dashboard />} />
           <Route path="/w/:slug/tasks" element={<Tasks />} />
-          <Route path="/w/:slug/members" element={<div className="text-brown">Members page</div>} />
+          <Route path="/w/:slug/members" element={<Members />} />
         </Route>
       ) : (
         <Route path="*" element={<Navigate to="/login" replace />} />
