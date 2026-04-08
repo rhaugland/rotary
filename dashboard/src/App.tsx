@@ -28,7 +28,14 @@ export default function App() {
 
       {user ? (
         <Route element={<Layout user={user} onLogout={logout} />}>
-          <Route path="/" element={<Navigate to={`/w/${user.workspaces[0]?.slug ?? ""}`} replace />} />
+          <Route path="/" element={
+            user.workspaces.length > 0
+              ? <Navigate to={`/w/${user.workspaces[0].slug}`} replace />
+              : <div className="p-8 text-center">
+                  <h2 className="text-lg font-semibold text-brown mb-2">No workspaces yet</h2>
+                  <p className="text-brown-light text-sm">Ask an admin for an invite link to join a workspace.</p>
+                </div>
+          } />
           <Route path="/w/:slug" element={<Dashboard />} />
           <Route path="/w/:slug/tasks" element={<Tasks />} />
           <Route path="/w/:slug/members" element={<Members />} />

@@ -1,4 +1,4 @@
-import { Outlet, useNavigate } from "react-router-dom";
+import { Outlet, useNavigate, useParams } from "react-router-dom";
 import Sidebar from "./Sidebar";
 import { useState, useEffect } from "react";
 
@@ -16,13 +16,24 @@ interface LayoutProps {
 
 export default function Layout({ user, onLogout }: LayoutProps) {
   const navigate = useNavigate();
+  const { slug } = useParams<{ slug: string }>();
   const [currentWorkspace, setCurrentWorkspace] = useState<Workspace | null>(null);
 
   useEffect(() => {
-    if (user.workspaces.length > 0 && !currentWorkspace) {
+    if (user.workspaces.length === 0) return;
+    // Sync workspace from URL slug
+    if (slug) {
+      const fromUrl = user.workspaces.find((w) => w.slug === slug);
+      if (fromUrl && fromUrl.id !== currentWorkspace?.id) {
+        setCurrentWorkspace(fromUrl);
+        return;
+      }
+    }
+    // Default to first workspace
+    if (!currentWorkspace) {
       setCurrentWorkspace(user.workspaces[0]);
     }
-  }, [user.workspaces, currentWorkspace]);
+  }, [user.workspaces, slug, currentWorkspace]);
 
   const isAdmin = currentWorkspace?.role === "admin";
 

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { post, setToken } from "../api/client";
+import { post } from "../api/client";
 import AvocadoLogo from "../components/AvocadoLogo";
 
 interface VerifyProps {

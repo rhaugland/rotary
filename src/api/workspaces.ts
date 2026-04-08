@@ -1,6 +1,5 @@
 import { Router } from "express";
-import { requireAuth } from "../auth/middleware.js";
-import { requireWorkspaceMember } from "../auth/middleware.js";
+import { requireAuth, requireWorkspaceMember, requireWorkspaceAdmin } from "../auth/middleware.js";
 import {
   createWorkspace,
   getWorkspacesForUser,
@@ -122,6 +121,26 @@ workspacesRouter.get("/:id/my-tasks", requireWorkspaceMember(), async (req, res)
     res.json(tasks);
   } catch (error) {
     console.error("My tasks error:", error);
+    res.status(500).json({ error: "Internal error" });
+  }
+});
+
+// Update workspace name (admin only)
+workspacesRouter.patch("/:id", requireWorkspaceAdmin(), async (req, res) => {
+  try {
+    const { name } = req.body;
+    if (!name) {
+      res.status(400).json({ error: "name is required" });
+      return;
+    }
+    const prisma = getPrisma();
+    const workspace = await prisma.workspace.update({
+      where: { id: req.params.id },
+      data: { name },
+    });
+    res.json({ id: workspace.id, name: workspace.name, slug: workspace.slug });
+  } catch (error) {
+    console.error("Update workspace error:", error);
     res.status(500).json({ error: "Internal error" });
   }
 });
