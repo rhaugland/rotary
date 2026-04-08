@@ -35,5 +35,8 @@ export const config = {
   anthropic: {
     apiKey: requireEnv("ANTHROPIC_API_KEY"),
   },
+  jwt: {
+    secret: optionalEnv("JWT_SECRET", "dev-secret-change-in-production"),
+  },
 } as const;
 
