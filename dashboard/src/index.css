@@ -1,0 +1,21 @@
+@import "tailwindcss";
+
+@theme {
+  --color-cream: #FFF8F0;
+  --color-cream-dark: #F5EDE3;
+  --color-guac: #4A7C59;
+  --color-guac-dark: #3A6147;
+  --color-guac-sidebar: #1B3A2D;
+  --color-guac-sidebar-hover: #244A38;
+  --color-brown: #3D2B1F;
+  --color-brown-light: #6B5344;
+  --color-tan: #E8DDD0;
+  --color-tan-light: #F0E8DE;
+}
+
+body {
+  background-color: var(--color-cream);
+  color: var(--color-brown);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  margin: 0;
+}
