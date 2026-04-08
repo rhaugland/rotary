@@ -2,3 +2,5 @@ node_modules/
 dist/
 .env
 *.log
+dashboard/dist/
+dashboard/node_modules/

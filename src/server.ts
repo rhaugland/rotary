@@ -1,4 +1,5 @@
 import express from "express";
+import path from "path";
 import { config } from "./config.js";
 import { getPrisma } from "./db/client.js";
 import { initAdapters, getAdapter } from "./adapters/index.js";
@@ -112,6 +113,13 @@ app.use("/api/workspaces", workspacesRouter);
 
 // Invite API (mixed auth — some routes public, some admin)
 app.use("/api", invitesRouter);
+
+// Serve dashboard static files
+const dashboardPath = path.join(process.cwd(), "dashboard", "dist");
+app.use("/dashboard", express.static(dashboardPath));
+app.get("/dashboard/*", (_req, res) => {
+  res.sendFile(path.join(dashboardPath, "index.html"));
+});
 
 // Start server
 async function main() {
