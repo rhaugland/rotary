@@ -7,6 +7,7 @@ import Invite from "./pages/Invite";
 import Dashboard from "./pages/Dashboard";
 import Tasks from "./pages/Tasks";
 import Members from "./pages/Members";
+import Settings from "./pages/Settings";
 
 export default function App() {
   const { user, loading, login, logout } = useAuth();
@@ -31,6 +32,7 @@ export default function App() {
           <Route path="/w/:slug" element={<Dashboard />} />
           <Route path="/w/:slug/tasks" element={<Tasks />} />
           <Route path="/w/:slug/members" element={<Members />} />
+          <Route path="/w/:slug/settings" element={<Settings />} />
         </Route>
       ) : (
         <Route path="*" element={<Navigate to="/login" replace />} />

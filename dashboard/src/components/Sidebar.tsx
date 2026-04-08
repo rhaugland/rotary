@@ -1,4 +1,4 @@
-import { NavLink, useParams } from "react-router-dom";
+import { NavLink } from "react-router-dom";
 import AvocadoLogo from "./AvocadoLogo";
 
 interface Workspace {
@@ -55,6 +55,7 @@ export default function Sidebar({ workspaces, currentWorkspace, onWorkspaceChang
             <NavLink to={`/w/${currentWorkspace?.slug}`} end className={linkClass}>Home</NavLink>
             <NavLink to={`/w/${currentWorkspace?.slug}/tasks`} className={linkClass}>Tasks</NavLink>
             <NavLink to={`/w/${currentWorkspace?.slug}/members`} className={linkClass}>Members</NavLink>
+            <NavLink to={`/w/${currentWorkspace?.slug}/settings`} className={linkClass}>Settings</NavLink>
           </>
         ) : (
           <NavLink to={`/w/${currentWorkspace?.slug}`} end className={linkClass}>My Tasks</NavLink>
