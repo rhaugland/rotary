@@ -1,6 +1,7 @@
 import { getOverdueTasks, getOpenTasksForUser, updateTaskStatus } from "../db/tasks.js";
 import { getAllUsers, getUserWithAddresses } from "../db/users.js";
 import { getAdapter } from "../adapters/index.js";
+import { getPrisma } from "../db/client.js";
 
 export async function processOverdueCheck(): Promise<void> {
   const overdueTasks = await getOverdueTasks();
@@ -8,12 +9,20 @@ export async function processOverdueCheck(): Promise<void> {
     if (task.status === "overdue") continue;
     await updateTaskStatus(task.id, "overdue");
 
+    // Get workspace name if available
+    let wsPrefix = "";
+    if ((task as any).workspaceId) {
+      const db = getPrisma();
+      const ws = await db.workspace.findUnique({ where: { id: (task as any).workspaceId } });
+      if (ws) wsPrefix = `[${ws.name}] `;
+    }
+
     const assignee = await getUserWithAddresses(task.assigneeId);
     if (assignee) {
       const address = assignee.addresses.find((a) => a.channel === assignee.preferredChannel);
       if (address) {
         const adapter = getAdapter(assignee.preferredChannel);
-        await adapter.sendMessage(address.address, `Task "${task.title}" is now overdue. Reply "done" if completed or give a new date.`);
+        await adapter.sendMessage(address.address, `${wsPrefix}Task "${task.title}" is now overdue. Reply "done" if completed or give a new date.`);
       }
     }
 
@@ -22,7 +31,7 @@ export async function processOverdueCheck(): Promise<void> {
       const address = creator.addresses.find((a) => a.channel === creator.preferredChannel);
       if (address) {
         const adapter = getAdapter(creator.preferredChannel);
-        await adapter.sendMessage(address.address, `Heads up — "${task.title}" assigned to ${task.assignee.name} is overdue.`);
+        await adapter.sendMessage(address.address, `${wsPrefix}Heads up — "${task.title}" assigned to ${task.assignee.name} is overdue.`);
       }
     }
   }
